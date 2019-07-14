@@ -73,7 +73,15 @@
 						return;
 					}
 
-					if(dependency.hasOwnProperty('value') && this.dependencyValues[dependency.field] !== dependency.value) {
+					if(dependency.hasOwnProperty('value') && 
+						(
+							(
+								dependency.value.isArray() &&
+								dependency.value.indexOf(this.dependencyValues[dependency.field]) === 1
+							) ||
+							this.dependencyValues[dependency.field] !== dependency.value
+						)
+					) {
 						this.dependenciesSatisfied = false;
 						return;
 					}
