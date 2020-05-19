@@ -3,8 +3,12 @@
 namespace Epartment\NovaDependencyContainer;
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
+use Laravel\Nova\Fields\Field;
 use Laravel\Nova\Fields\FieldCollection;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Laravel\Nova\Fields\MorphTo;
 
 trait HasDependencies
 {
@@ -16,26 +20,69 @@ trait HasDependencies
      */
     public function availableFields(NovaRequest $request)
     {
-        // Needs to be filtered once to resolve Panels
+        // needs to be filtered once to resolve Panels
         $fields = $this->filter($this->fields($request));
         $availableFields = [];
 
         foreach ($fields as $field) {
             if ($field instanceof NovaDependencyContainer) {
-                $availableFields[] = $field;
-                if ($this->doesRouteRequireChildFields()) {
-                    $this->extractChildFields($field->meta['fields']);
+                $availableFields[] = $this->filterFieldForRequest($field, $request);
+                if($field->areDependenciesSatisfied($request) || $this->extractableRequest($request, $this->model())) {
+                    if ($this->doesRouteRequireChildFields()) {
+                        $this->extractChildFields($field->meta['fields']);
+                    }
                 }
             } else {
-                $availableFields[] = $field;
+                $availableFields[] = $this->filterFieldForRequest($field, $request);
             }
         }
 
         if ($this->childFieldsArr) {
             $availableFields = array_merge($availableFields, $this->childFieldsArr);
         }
-        
-        return new FieldCollection(array_values($this->filter($availableFields)));
+
+
+        $availableFields = new FieldCollection(array_values($this->filter($availableFields)));
+        return $availableFields;
+    }
+
+    /**
+     * Check if request needs to extract child fields
+     *
+     * @param NovaRequest $request
+     * @param $model
+     * @return bool
+     */
+    protected function extractableRequest(NovaRequest $request, $model) {
+        // if form was submitted to update (method === 'PUT')
+        if($request->isUpdateOrUpdateAttachedRequest() && strtoupper($request->get('_method', null)) === 'PUT') {
+            return false;
+        }
+        // if form was submitted to create and new resource
+        if($request->isCreateOrAttachRequest() && $model->id === null) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * @param $field
+     * @param NovaRequest $request
+     * @return mixed
+     *
+     * @todo: implement
+     */
+    public function filterFieldForRequest($field, NovaRequest $request) {
+        // @todo: filter fields for request, e.g. show/hideOnIndex, create, update or whatever
+        return $field;
+    }
+
+    /**
+     * @param array $availableFields
+     * @param NovaRequest $request
+     */
+    public function filterFieldsForRequest(Collection $availableFields, NovaRequest $request) {
+        return $availableFields;
     }
 
     /**
@@ -43,10 +90,13 @@ trait HasDependencies
      */
     protected function doesRouteRequireChildFields() : bool
     {
-        return ends_with(Route::currentRouteAction(), 'AssociatableController@index')
-            || ends_with(Route::currentRouteAction(), 'ResourceStoreController@handle')
-            || ends_with(Route::currentRouteAction(), 'ResourceUpdateController@handle')
-            || ends_with(Route::currentRouteAction(), 'FieldDestroyController@handle');
+        return Str::endsWith(Route::currentRouteAction(), [
+            'FieldDestroyController@handle',
+            'ResourceUpdateController@handle',
+            'ResourceStoreController@handle',
+            'AssociatableController@index',
+            'MorphableController@index',
+        ]);
     }
 
     /**
@@ -60,6 +110,7 @@ trait HasDependencies
                 $this->extractChildFields($childField->meta['fields']);
             } else {
                 if (array_search($childField->attribute, array_column($this->childFieldsArr, 'attribute')) === false) {
+                    // @todo: we should not randomly apply rules to child-fields.
                     $childField = $this->applyRulesForChildFields($childField);
                     $this->childFieldsArr[] = $childField;
                 }
@@ -92,12 +143,17 @@ trait HasDependencies
      */
     public function validateFields() {
         $availableFields = [];
-        foreach ($this->action()->fields() as $field) {
-            if ($field instanceof NovaDependencyContainer) {
-                $availableFields[] = $field;
-                $this->extractChildFields($field->meta['fields']);
-            } else {
-                $availableFields[] = $field;
+        if ( !empty( ($action_fields = $this->action()->fields()) ) ) {
+            foreach ($action_fields as $field) {
+                if ($field instanceof NovaDependencyContainer) {
+                    // do not add any fields for validation if container is not satisfied
+                    if($field->areDependenciesSatisfied($this)) {
+                        $availableFields[] = $field;
+                        $this->extractChildFields($field->meta['fields']);
+                    }
+                } else {
+                    $availableFields[] = $field;
+                }
             }
         }
 
@@ -108,5 +164,5 @@ trait HasDependencies
         $this->validate(collect($availableFields)->mapWithKeys(function ($field) {
             return $field->getCreationRules($this);
         })->all());
-    }    
+    }
 }
