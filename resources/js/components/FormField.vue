@@ -22,6 +22,9 @@
 		props: ['resourceName', 'resourceId', 'field'],
 
 		mounted() {
+			// @note fix for inline-relationships resulting in incorrect attribute value
+			this.field.attribute = this.field.attribute.replace(this.field.attrib, '');
+
 			this.registerDependencyWatchers(this.$root, function() {
 				this.updateDependencyStatus();
 			});

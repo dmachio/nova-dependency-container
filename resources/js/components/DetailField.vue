@@ -17,6 +17,9 @@
 		props: ['resource', 'resourceName', 'resourceId', 'field'],
 
 		created() {
+			// @note fix for inline-relationships resulting in incorrect attribute value
+			this.field.attribute = this.field.attribute.replace(this.field.attrib, '');
+			
 			this.updateDependencyStatus()
 		},
 
