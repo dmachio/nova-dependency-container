@@ -149,7 +149,7 @@
 							)
 						)
 					) {
-						this.dependenciesSatisfied = false;
+						this.dependenciesSatisfied = true;
 						return;
 					}
 				}
