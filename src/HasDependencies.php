@@ -59,7 +59,7 @@ trait HasDependencies
             return false;
         }
         // if form was submitted to create and new resource
-        if($request->isCreateOrAttachRequest() && $model->id === null) {
+        if($request->isCreateOrAttachRequest() && (!is_subclass_of($model, 'Illuminate\Database\Eloquent\Model') || $model->id === null)) {
             return false;
         }
         return true;
