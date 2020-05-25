@@ -135,7 +135,9 @@
 						return;
 					}
 
-					if(dependency.hasOwnProperty('value') && 
+					if(dependency.hasOwnProperty('value') &&
+						// Ensure that this is not some other kind of dependency type
+						Object.keys(dependency).filter(value => ['empty', 'notEmpty', 'nullOrZero', 'not'].includes(value)).length === 0 &&
 						(
 							(
 								Array.isArray(dependency.value) &&
